@@ -242,12 +242,12 @@ def frontalize(profile_path, save_dir=None, save_filename=None, device='cuda',
     ep = np.zeros((n_ep, 1), dtype = np.float32)    
 
     # Estimation for the first iteration
-    R, s, T, ep, sp, Sig_in, V = fitting.compute_init(M2.transpose(), bfm, R_init, s_init, t_init)
+    R, s, T, ep, sp_fix, Sig_in, V = fitting.compute_init(M2.transpose(), bfm, R_init, s_init, t_init)
     Y = (s*R.dot(M2.T) + T).T
     print("new algo: R:{}, s:{}, t:{}".format(matrix2angle(R), s, T))
     new_algo = (s * R.dot(M2.transpose()) + T).transpose()
     frontalized_LM_lst.append(Y)
-    vertices = generate_vertices(bfm, sp, ep)
+    vertices = generate_vertices(bfm, sp_fix, ep)
     generic_model = vertices[bfm.kpt_ind].copy()
     # Rotate the face model 180 degree around the x-axis
     # generic_model[:, 1] = - generic_model[:, 1]
@@ -295,7 +295,7 @@ def frontalize(profile_path, save_dir=None, save_filename=None, device='cuda',
         Sig_lst_k.append(Sig_in)
 
         # Estimate the shapes with the temporal model 
-        ep, V, Psi, P = fitting.compute_shape(M2, R, s, Sig_in, T, bfm, Gamma_s, Gamma_v, v, Psi, P, sp, alpha)
+        ep, V, Psi, P = fitting.compute_shape(M2, R, s, Sig_in, T, bfm, Gamma_s, Gamma_v, v, Psi, P, sp_fix, alpha)
         v = [*ep.flatten(), 1, *V.flatten()]
         v = np.array(v).reshape((29+1+68*3, 1))
         ep_lst_k.append(ep)
@@ -307,7 +307,7 @@ def frontalize(profile_path, save_dir=None, save_filename=None, device='cuda',
         #compare_2D(Y, V_temp, filename="./verify/lm{}.jpg".format(idx))
 
         # Verify ep values:
-        vertices = generate_vertices(bfm, sp, ep)
+        vertices = generate_vertices(bfm, sp_fix, ep)
         generic_model = vertices[bfm.kpt_ind].copy()
         compare_2D(Y, generic_model, filename="./verify/lm{}_ep.jpg".format(idx))
 
@@ -406,6 +406,7 @@ def frontalize(profile_path, save_dir=None, save_filename=None, device='cuda',
 
         ## 3DMM fitting using frontalized 3D landamrks
         ## The head pose is fixed after the first iteration
+        sp = sp_fix
         image_vertices, s_3d, R_3d, t_3d, sp, ep = fitting.get_3DMM_vertices(frontalized_LM, LM_ref, u_max, v_max, bfm, s_3d, R_3d, t_3d, sp, maxiter = maxiter)
         # print('ep old estimate: {}'.format(ep))
 
@@ -414,7 +415,7 @@ def frontalize(profile_path, save_dir=None, save_filename=None, device='cuda',
         # Since we have already estimated sp, ep, no need to call get_3DMM_vertices
         ep = ep_lst_k[idx]
         print('check ep {} : {}'.format(idx, ep))
-        fittted_vertices = generate_vertices(bfm, sp, ep)
+        fittted_vertices = generate_vertices(bfm, sp_fix, ep)
     
         # Scale and translate the vertices to image plain
         fittted_vertices /= s_max    
