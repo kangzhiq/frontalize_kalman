@@ -437,7 +437,7 @@ def frontalize(profile_path, save_dir=None, save_filename=None, device='cuda',
 
         vis = np.ones(bfm.triangles.shape[0])
         # Z-buffer depth map
-        depth_buffer = get_z_map_fast(bfm, u_max, v_max, fittted_vertices, vis)
+        depth_buffer = get_z_map(bfm, u_max, v_max, fittted_vertices, vis)
 
         lip_LM = frontalized_LM[48:]
         lip_u, lip_v, lip_nb_u, lip_nb_v = search_region(lip_LM, shape=(1, 1), factor=[2, 1.4])

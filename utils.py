@@ -18,7 +18,7 @@ from landmarks3D_fitting import *
 import    pyximport
 pyximport.install()
 
-from BFM.mesh.cython import mesh_core_cython
+#from BFM.mesh.cython import mesh_core_cython
 
 """
 This file contains the methods utilized during the frontalization procedure, 
