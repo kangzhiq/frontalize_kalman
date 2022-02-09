@@ -1,1 +1,4 @@
 # exclude files
+/BFM/data/BFM.mat
+/MEAD/*
+*.pptx

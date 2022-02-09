@@ -18,6 +18,8 @@ import registration_utils as regut
 import landmarks3D_fitting_kalman as fitting 
 from utils import *
 
+
+
 def generate_vertices(bfm, shape_para, exp_para, t = None, flatten=False):
     '''
     Args:
@@ -28,7 +30,8 @@ def generate_vertices(bfm, shape_para, exp_para, t = None, flatten=False):
     '''    
     vertices = bfm.model['shapeMU'].copy()
     len_ver = len(vertices)
-    vertices = np.reshape(vertices, [int(len_ver/3), 3])
+    
+    vertices = np.reshape(vertices, [int(3), int(len_ver/3)], 'F').T
     # Rotate 180 the vertices along x-axis
     vertices[:, 1:] = -vertices[:, 1:]
     if t is not None:
@@ -148,6 +151,9 @@ def frontalize(profile_path, save_dir=None, save_filename=None, device='cuda',
     sp = bfm.get_shape_para('zero')
     ep = bfm.get_exp_para('zero')
     vertices = bfm.generate_vertices(sp, ep)
+
+    plot_vertices(bfm, 1080, 1920, vertices/300,  filename='./depthmap/checkzero.jpg', center=True)
+    
     len_ver = len(bfm.model['shapePC'])
     generic_model = vertices[bfm.kpt_ind].copy()
     # Rotate the face model 180 degree around the x-axis
@@ -230,7 +236,7 @@ def frontalize(profile_path, save_dir=None, save_filename=None, device='cuda',
     #######################
     maxiter = 200
     idx = 0
-    alpha = 0.5000000
+    alpha = 0.15
     M2 = LMs[idx].copy()
     M2[:, 2] = - M2[:, 2]
     # Initialization of R, s, t
@@ -248,11 +254,18 @@ def frontalize(profile_path, save_dir=None, save_filename=None, device='cuda',
     new_algo = (s * R.dot(M2.transpose()) + T).transpose()
     frontalized_LM_lst.append(Y)
     vertices = generate_vertices(bfm, sp_fix, ep)
+
+    plot_vertices(bfm, 1080, 1920, vertices/s,  filename='./depthmap/checkini.jpg', center=True)
+
+    vertices_temp = generate_vertices(bfm, np.zeros_like(sp_fix), np.zeros_like(ep))
+
+    plot_vertices(bfm, 1080, 1920, vertices_temp/s,  filename='./depthmap/checkini_zero.jpg', center=True)
+
     generic_model = vertices[bfm.kpt_ind].copy()
     # Rotate the face model 180 degree around the x-axis
     # generic_model[:, 1] = - generic_model[:, 1]
     compare_2D(Y, generic_model, filename="./verify/lm{}_ep.jpg".format(0))
-    print('ep new estimate: {}'.format(ep))
+    # print('ep new estimate: {}'.format(ep))
     R_lst_k.append(R)
     s_lst_k.append(s)
     T_lst_k.append(T)
@@ -264,17 +277,17 @@ def frontalize(profile_path, save_dir=None, save_filename=None, device='cuda',
     # intialization 
     v = [*ep.flatten(), 1, *V.flatten()] # K + 1 + 3J
     v = np.array(v).reshape((29+1+68*3, 1))
-    # Psi= np.eye(29+1+68*3)
-    # P = np.eye(29+1+68*3)
+    Psi= np.eye(29+1+68*3)
+    P = np.eye(29+1+68*3)
     # Use the estimation at iteration 10
-    P = np.load('matrix_P.npy')
-    Psi = np.load('matrix_Psi.npy')
+    # P = np.load('matrix_P.npy')
+    # Psi = np.load('matrix_Psi.npy')
 
-    #Gamma_s = np.eye(29+1)
-    Gamma_v = np.eye(204) * 100
-    #Gamma_s = np.random.randn(29+1, 29+1)
+    # Gamma_s = np.eye(29+1)
+    Gamma_v = np.eye(204) * 10000
+    # Gamma_s = np.random.randn(29+1, 29+1)
     #Gamma_v = np.random.randn(204, 204)
-    #Gamma_v = np.load('cov_v.npy')
+    # Gamma_v = np.load('cov_v.npy')
     Gamma_s = np.load('cov_ep.npy')
 
     #######################
@@ -406,15 +419,16 @@ def frontalize(profile_path, save_dir=None, save_filename=None, device='cuda',
 
         ## 3DMM fitting using frontalized 3D landamrks
         ## The head pose is fixed after the first iteration
-        sp = sp_fix
+        #sp = sp_fix
         image_vertices, s_3d, R_3d, t_3d, sp, ep = fitting.get_3DMM_vertices(frontalized_LM, LM_ref, u_max, v_max, bfm, s_3d, R_3d, t_3d, sp, maxiter = maxiter)
         # print('ep old estimate: {}'.format(ep))
-
+        # print('old ep {} : {}'.format(idx, ep))
         compare_2D(frontalized_LM, image_vertices[bfm.kpt_ind], filename="./verify/lm{}_ep_old.jpg".format(idx))
-
+    
         # Since we have already estimated sp, ep, no need to call get_3DMM_vertices
         ep = ep_lst_k[idx]
-        print('check ep {} : {}'.format(idx, ep))
+        # print('check ep {} : {}'.format(idx, ep))
+        
         fittted_vertices = generate_vertices(bfm, sp_fix, ep)
     
         # Scale and translate the vertices to image plain
@@ -427,7 +441,7 @@ def frontalize(profile_path, save_dir=None, save_filename=None, device='cuda',
 
         # Verify fitted ones
         compare_2D(frontalized_LM, fitted_lm, filename="./verify/lm{}_frontalized.jpg".format(idx))
-
+        
         # flatten
         #fittted_vertices = fittted_vertices.reshape((len_ver, 1))
 
@@ -438,7 +452,11 @@ def frontalize(profile_path, save_dir=None, save_filename=None, device='cuda',
 
         vis = np.ones(bfm.triangles.shape[0])
         # Z-buffer depth map
+        # depth_buffer = get_z_map_fast(bfm, u_max, v_max, fittted_vertices, vis)
         depth_buffer = get_z_map(bfm, u_max, v_max, fittted_vertices, vis)
+
+        plot_depth_map(depth_buffer, filename="./depthmap/map{}.jpg".format(idx))
+
 
         lip_LM = frontalized_LM[48:]
         lip_u, lip_v, lip_nb_u, lip_nb_v = search_region(lip_LM, shape=(1, 1), factor=[2, 1.4])

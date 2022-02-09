@@ -306,7 +306,7 @@ def objectif_function(Y, X, s, R, t, sigma, w, alpha_sp, EV_sp, lamb_sp, alpha_e
     diff = ((Y - s* R @ X - t)**2).sum(axis=0)  @ w.reshape((-1, 1)) 
     diff /= np.mean(Y)**2
     # print('loss: diff: {}, log_sig: {}, sp: {}, ep: {}'.format(diff, log_sig*n, regu_sp, regu_ep))
-    return diff*1000 + log_sig * n /10 + regu_sp + regu_ep
+    return diff + log_sig * n # + regu_sp + regu_ep
 
 def enlarge_weights(w):
     w[0, 60:68] *= 5
@@ -335,9 +335,9 @@ def compute_init(X, bfm, R0, s0, t0, maxiter=200):
     shapePC = model['shapePC'][valid_ind, :n_sp]
     expPC = model['expPC'][valid_ind, :n_ep]
 
-    
     # Rotate the vertices 180 degree around x-axis
-    shapeMU = np.reshape(shapeMU, [int(len(shapeMU)/3), 3])
+    shapeMU = np.reshape(shapeMU, [int(3), int(len(shapeMU)/3)], 'F').T
+    #shapeMU = np.reshape(shapeMU, [int(len(shapeMU)/3), 3])
     shapeMU[:, 1:] = -shapeMU[:, 1:]
 
     #V = np.reshape(shapeMU, [int(len(shapeMU)/3), 3]).T.copy()
@@ -345,14 +345,16 @@ def compute_init(X, bfm, R0, s0, t0, maxiter=200):
     shapeMU = shapeMU.reshape((68*3, 1))
 
 
-    #X[2, :] = - X[2, :]
+    # X[1:, :] = - X[1:, :]
     # X, V: D*N
     Xc = X.copy()
     Vc = V.copy()
     
-    
     Xc -= np.mean(X, axis = 1, keepdims = True)
     Vc -= np.mean(V, axis = 1, keepdims = True)
+
+    # from utils import compare_2D
+    # compare_2D(Xc[:, :40].T, Vc[:, :40].T/300, filename="./verify/00{}test.jpg".format(0))
     
     D, N = X.shape
     s = s0
@@ -408,6 +410,7 @@ def compute_init(X, bfm, R0, s0, t0, maxiter=200):
         t = np.reshape(t,(3,1))
             
         Y = s*R.dot(X) + t
+        # compare_2D(Y.T, Vc.T, filename="./verify/00{}fitted.jpg".format(iter))
         # print("new algo: R:{}, s:{}, t:{}, iter: {}".format(matrix2angle(R), s, t, iter))
         #----- estimate shape
         # Allows for more iterations for shape
@@ -416,15 +419,24 @@ def compute_init(X, bfm, R0, s0, t0, maxiter=200):
             shape = shapePC.dot(sp)
             shape = np.reshape(shape, [int(len(shape)/3), 3]).T
             #w = enlarge_weights(w)
-            ep = estimate_non_rigid_param_3D_robust_regu_kalman(Y, shapeMU, expPC, model['expEV'][:n_ep,:], shape, s, R, t, np.ones_like(w), invSig, lamb)
+            ep = estimate_non_rigid_param_3D_robust_regu_kalman(Y, shapeMU, expPC, model['expEV'][:n_ep,:], shape, s, R, t, w, invSig, lamb)
 
+            a = shapeMU
+            a = np.reshape(a, [68, 3])
+            b = shapeMU + expPC.dot(ep)
+            b = np.reshape(b, [68, 3])
+            
             # shape
             expression = expPC.dot(ep)
             expression = np.reshape(expression, [int(len(expression)/3), 3]).T
-            sp = estimate_non_rigid_param_3D_robust_regu_kalman(Y, shapeMU, shapePC, model['shapeEV'][:n_sp,:], expression, s, R, t, np.ones_like(w), invSig, lamb)
+            sp = estimate_non_rigid_param_3D_robust_regu_kalman(Y, shapeMU, shapePC, model['shapeEV'][:n_sp,:], expression, s, R, t, w, invSig, lamb*100)
 
-        V_fitting = shapeMU + shapePC.dot(sp) + expPC.dot(ep)
-        V_fitting = np.reshape(V_fitting, [int(len(V_fitting)/3), 3]).T     
+            V_fitting = shapeMU + shapePC.dot(sp) + expPC.dot(ep)
+            V_fitting = np.reshape(V_fitting, [int(len(V_fitting)/3), 3]).T   
+
+            V = V_fitting
+            Vc = V - np.mean(V, axis = 1, keepdims = True)          
+            
 
         loss = objectif_function(V_fitting, X, s, R, t, Sig_in, w, sp.reshape((-1, 1)), model['shapeEV'][:n_sp,:], lamb, ep.reshape((-1, 1)), model['expEV'][:n_ep,:], lamb)
         # print('iter: {} shape loss: {}'.format(iter, loss))
@@ -440,6 +452,7 @@ def compute_init(X, bfm, R0, s0, t0, maxiter=200):
         loss_old = loss    
         V = V_fitting
         Vc = V - np.mean(V, axis = 1, keepdims = True)
+        # compare_2D(Y.T, Vc.T, filename="./verify/00{}fitted.jpg".format(iter))
     # print('weight: {}'.format(w))     
     return R, s, t, ep, sp, Sig_in, V_fitting
 
@@ -462,7 +475,8 @@ def compute_shape(X, R, s, Sig_in, t, bfm, Gamma_s, Gamma_v, v, Psi, P, shape_pa
     expPC = model['expPC'][valid_ind, :n_ep]
 
     # Rotate the vertices 180 degree around x-axis
-    shapeMU = np.reshape(shapeMU, [int(len(shapeMU)/3), 3])
+    shapeMU = np.reshape(shapeMU, [int(3), int(len(shapeMU)/3)], 'F').T
+    # shapeMU = np.reshape(shapeMU, [int(len(shapeMU)/3), 3])
     shapeMU[:, 1:] = -shapeMU[:, 1:]
     shapeMU = shapeMU.reshape((68*3, 1))
 

@@ -18,7 +18,10 @@ from landmarks3D_fitting import *
 import    pyximport
 pyximport.install()
 
-#from BFM.mesh.cython import mesh_core_cython
+# from BFM.mesh.cython import mesh_core_cython
+
+import matplotlib.pyplot as plt
+
 
 """
 This file contains the methods utilized during the frontalization procedure, 
@@ -658,6 +661,26 @@ def plot_cov(cov, filename='cov.jpg'):
     cb.ax.tick_params(labelsize=10)
     plt.savefig(filename)
     plt.close()
+
+def plot_depth_map(depth_map, filename='depth_map.jpg'):
+    map = depth_map.copy()
+    map[map == map.max()] = 0
+    fig = plt.figure(figsize=(13, 15))
+    plt.imshow(map)
+    fig.savefig(filename, dpi=200) 
+    plt.close()
+
+def plot_vertices(bfm, u_max, v_max, fittted_vertices, filename='depth_map.jpg', center=False):
+    vertices = fittted_vertices.copy()
+    vis = np.ones(bfm.triangles.shape[0])
+    if center:
+        vertices += np.array([v_max/2, u_max/2, 0])
+
+    # Z-buffer depth map
+    # depth_buffer = get_z_map_fast(bfm, u_max, v_max, vertices, vis)
+    depth_buffer = get_z_map(bfm, u_max, v_max, fittted_vertices, vis)
+
+    plot_depth_map(depth_buffer, filename)
 
 
 def get_z_map(bfm, h, w, image_vertices, visibility):
